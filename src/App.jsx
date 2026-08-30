@@ -57,7 +57,7 @@ function App(){
       <Route path="/upgrade" element={<Upgrade profile={profile}/>}/>
       <Route path="/profile" element={<Profile profile={profile} refresh={()=>refresh(session.user.id)}/>}/>
       <Route path="/legal/:page" element={<Legal/>}/>
-      <Route path="/admin" element={<Admin/>}/>
+      <Route path="/admin" element={profile?.is_admin?<Admin/>:<Navigate to="/dashboard" replace/>}/>
     </Route>
     <Route path="*" element={<Navigate to={session?'/dashboard':'/auth'} replace/>}/>
   </Routes>
