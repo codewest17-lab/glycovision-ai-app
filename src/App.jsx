@@ -80,7 +80,42 @@ function Dashboard({profile,balance}){const nav=useNavigate();const [recent,setR
 function Stat({title,value,sub,icon:Icon}){return <div className="stat-card"><div className="stat-icon"><Icon size={18}/></div><div><span>{title}</span><strong>{value}</strong><small>{sub}</small></div></div>}
 function MealRow({meal,onDelete}){return <div className="meal-row"><div className="meal-thumb">{meal.image_path?<div className="thumb-placeholder"><Camera size={18}/></div>:<Activity size={18}/>}</div><div className="meal-main"><strong>{(meal.detected_foods||[]).slice(0,2).map(x=>typeof x==='string'?x:x.name).join(', ')||'Meal analysis'}</strong><span>{new Date(meal.created_at).toLocaleDateString()}</span></div><div className="meal-sugar"><strong>{meal.sugar??'—'}g</strong><span>sugar</span></div>{onDelete&&<button className="icon-btn danger" onClick={()=>onDelete(meal.id)}><Trash2 size={17}/></button>}</div>}
 
-function Scanner({balance,balanceLoading,balanceError,refresh}){const [file,setFile]=useState(null);const [preview,setPreview]=useState('');const [busy,setBusy]=useState(false);const [result,setResult]=useState(null);const [error,setError]=useState('');const [request,setRequest]=useState('');const nav=useNavigate(); const balanceReady=balance!==null && !balanceLoading && !balanceError; const remaining=balanceReady ? Number(balance.remaining)||0 : null; function choose(f){if(!f)return;setFile(f);setPreview(URL.createObjectURL(f));setResult(null);setError('');} async function analyze(){if(!file)return; if(!balanceReady)return; if(remaining<=0){nav('/upgrade');return;}setBusy(true);setError(''); try{const {data:{user}}=await supabase.auth.getUser(); const ext=file.name.split('.').pop()||'jpg'; const path=`${user.id}/${crypto.randomUUID()}.${ext}`; const up=await supabase.storage.from('meal-images').upload(path,file,{contentType:file.type,upsert:false}); if(up.error)throw up.error; const {data, error:fnErr}=await supabase.functions.invoke('analyze-meal',{body:{image_path:path,user_request:request}}); if(fnErr)throw fnErr; setResult(data.scan); await refresh();}catch(e){setError(e.message||'We could not analyze this meal. Please try again.');}finally{setBusy(false)}} return <section className="page"><div className="scanner-head"><div><span className="eyebrow">AI MEAL ANALYSIS</span><h1>What’s on your plate?</h1><p>Upload or capture a meal photo and GlycoVision will estimate sugar and nutrition.</p></div><div className="balance-card"><Camera size={18}/><strong>{balanceLoading?'…':balanceError?'—':remaining}</strong><span>{balanceLoading?'loading scans':balanceError?'balance unavailable':'scans left'}</span></div></div>{balanceError&&<div className="alert error">{balanceError}</div>}{error&&<div className="alert error">{error}</div>}{result?<AnalysisResult result={result} onAgain={()=>{setResult(null);setFile(null);setPreview('')}}/>:<><label className={preview?'upload-zone has-image':'upload-zone'}>{preview?<img src={preview} alt="Meal preview"/>:<><div className="upload-icon"><Upload size={24}/></div><strong>Upload a meal photo</strong><span>JPG, PNG or WEBP • up to 10MB</span><small>On mobile, you can use your camera.</small></>}<input type="file" accept="image/*" capture="environment" onChange={e=>choose(e.target.files?.[0])}/></label><label className="field">Optional request<input value={request} onChange={e=>setRequest(e.target.value)} placeholder="e.g. Focus on hidden sugars"/></label><button className="primary wide" disabled={!file||busy||!balanceReady} onClick={analyze}>{busy?<><span className="spinner"/>Analyzing your meal…</>:<><Sparkles size={18}/> Analyze meal</>}</button><div className="scan-note"><ShieldCheck size={17}/><span>Your image is stored securely and used only for your meal analysis.</span></div></>}</section>}
+function Scanner({balance,balanceLoading,balanceError,refresh}){const [file,setFile]=useState(null);const [preview,setPreview]=useState('');const [busy,setBusy]=useState(false);const [result,setResult]=useState(null);const [error,setError]=useState('');const [request,setRequest]=useState('');const nav=useNavigate(); const balanceReady=balance!==null && !balanceLoading && !balanceError; const remaining=balanceReady ? Number(balance.remaining)||0 : null; function choose(f){if(!f)return;setFile(f);setPreview(URL.createObjectURL(f));setResult(null);setError('');} async function analyze(){if(!file)return; if(!balanceReady)return; if(remaining<=0){nav('/upgrade');return;}setBusy(true);setError(''); try{const {data:{user}}=await supabase.auth.getUser(); const ext=file.name.split('.').pop()||'jpg'; const path=`${user.id}/${crypto.randomUUID()}.${ext}`; const up=await supabase.storage.from('meal-images').upload(path,file,{contentType:file.type,upsert:false}); if(up.error)throw up.error; const { data, error: fnErr } = await supabase.functions.invoke(
+  'analyze-meal',
+  {
+    body: {
+      image_path: path,
+      user_request: request
+    }
+  }
+);
+
+if (fnErr) {
+  throw new Error(
+    fnErr.message || 'Unable to connect to the meal analysis service.'
+  );
+}
+
+if (!data) {
+  throw new Error('The analysis service returned no response.');
+}
+
+if (data.ok === false) {
+  throw new Error(
+    data.message ||
+    data.error ||
+    'The meal could not be analyzed.'
+  );
+}
+
+if (!data.scan) {
+  throw new Error(
+    'The analysis completed but returned no meal data. Please try again.'
+  );
+}
+
+setResult(data.scan);
+await refresh();}catch(e){setError(e.message||'We could not analyze this meal. Please try again.');}finally{setBusy(false)}} return <section className="page"><div className="scanner-head"><div><span className="eyebrow">AI MEAL ANALYSIS</span><h1>What’s on your plate?</h1><p>Upload or capture a meal photo and GlycoVision will estimate sugar and nutrition.</p></div><div className="balance-card"><Camera size={18}/><strong>{balanceLoading?'…':balanceError?'—':remaining}</strong><span>{balanceLoading?'loading scans':balanceError?'balance unavailable':'scans left'}</span></div></div>{balanceError&&<div className="alert error">{balanceError}</div>}{error&&<div className="alert error">{error}</div>}{result?<AnalysisResult result={result} onAgain={()=>{setResult(null);setFile(null);setPreview('')}}/>:<><label className={preview?'upload-zone has-image':'upload-zone'}>{preview?<img src={preview} alt="Meal preview"/>:<><div className="upload-icon"><Upload size={24}/></div><strong>Upload a meal photo</strong><span>JPG, PNG or WEBP • up to 10MB</span><small>On mobile, you can use your camera.</small></>}<input type="file" accept="image/*" capture="environment" onChange={e=>choose(e.target.files?.[0])}/></label><label className="field">Optional request<input value={request} onChange={e=>setRequest(e.target.value)} placeholder="e.g. Focus on hidden sugars"/></label><button className="primary wide" disabled={!file||busy||!balanceReady} onClick={analyze}>{busy?<><span className="spinner"/>Analyzing your meal…</>:<><Sparkles size={18}/> Analyze meal</>}</button><div className="scan-note"><ShieldCheck size={17}/><span>Your image is stored securely and used only for your meal analysis.</span></div></>}</section>}
 function AnalysisResult({result,onAgain}){const n=result;return <div className="analysis"><div className="analysis-top"><div><span className="eyebrow">ANALYSIS COMPLETE</span><h2>{(n.detected_foods||[]).map(x=>typeof x==='string'?x:x.name).join(', ')||'Your meal'}</h2><p>{n.nutrition_summary}</p></div><div className="confidence"><strong>{Math.round(n.confidence_score||0)}%</strong><span>confidence</span></div></div><div className="nutrition-grid"><Metric label="Sugar" value={n.sugar} unit="g" highlight/><Metric label="Calories" value={n.calories} unit="kcal"/><Metric label="Carbs" value={n.carbohydrates} unit="g"/><Metric label="Protein" value={n.protein} unit="g"/><Metric label="Fat" value={n.fat} unit="g"/><Metric label="Fiber" value={n.fiber} unit="g"/></div><div className="insight-card"><span className="eyebrow">HEALTH INSIGHTS</span><ul>{(n.health_insights||[]).map((x,i)=><li key={i}><Check size={16}/>{x}</li>)}</ul></div><button className="secondary wide" onClick={onAgain}><Camera size={18}/> Scan another meal</button></div>}
 function Metric({label,value,unit,highlight}){return <div className={highlight?'metric highlight':'metric'}><span>{label}</span><strong>{value??'—'}<small>{unit}</small></strong></div>}
 
