@@ -1,0 +1,6 @@
+{
+  "name": "GlycoVision AI",
+  "description": "AI-powered meal scanning and glucose-aware nutrition tracking application.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
